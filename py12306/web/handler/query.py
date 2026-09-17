@@ -10,7 +10,7 @@ query = Blueprint('query', __name__)
 
 
 @query.route('/query', methods=['GET'])
-@jwt_required
+@jwt_required()
 def query_lists():
     """
     查询任务列表

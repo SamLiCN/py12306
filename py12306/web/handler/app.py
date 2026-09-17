@@ -28,7 +28,7 @@ def index():
 
 
 @app.route('/app/menus', methods=['GET'])
-@jwt_required
+@jwt_required()
 def menus():
     """
     菜单列表
@@ -44,7 +44,7 @@ def menus():
 
 
 @app.route('/app/actions', methods=['GET'])
-@jwt_required
+@jwt_required()
 def actions():
     """
     操作列表

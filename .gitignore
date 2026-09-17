@@ -2,6 +2,9 @@
 .vscode
 .DS_Store
 venv
+.venv
+.venv/
+.github/
 __pycache__
 env.py
 env.slave.py

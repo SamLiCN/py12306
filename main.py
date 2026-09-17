@@ -17,10 +17,12 @@ def main():
     App.did_start()
 
     App.run_check()
-    Query.check_before_run()
 
     ####### 运行任务
+    # Web 提前启动：Query.check_before_run() 会初始化查询并请求 12306/设备ID 接口，
+    # 一旦这些网络请求阻塞或失败重试，就会卡在查询初始化上，导致 Web 端口迟迟不监听。
     Web.run()
+    Query.check_before_run()
     Cdn.run()
     User.run()
     Query.run()

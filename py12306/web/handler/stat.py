@@ -10,7 +10,7 @@ stat = Blueprint('stat', __name__)
 
 
 @stat.route('/stat/dashboard', methods=['GET'])
-@jwt_required
+@jwt_required()
 def dashboard():
     """
     状态统计
@@ -34,7 +34,7 @@ def dashboard():
 
 
 @stat.route('/stat/cluster', methods=['GET'])
-@jwt_required
+@jwt_required()
 def clusters():
     """
     节点统计
