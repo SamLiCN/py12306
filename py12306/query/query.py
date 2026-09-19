@@ -119,9 +119,12 @@ class Query:
         self.jobs.append(job)
         return job
 
-    def request_device_id(self, force_renew = False):
+    def request_device_id(self, force_renew=False, _retry=0):
         """
         获取加密后的浏览器特征 ID
+        注意：原第三方服务 https://12306-rail-id-v2.pjialin.com/ 已停服。
+        这里把「非 200 就无限递归重试」改为最多重试 1 次后放弃，
+        避免把查询初始化卡死在死服务上（查票本身不依赖该设备 ID）。
         :return:
         """
         expire_time =  self.session.cookies.get('RAIL_EXPIRATION')
@@ -129,9 +132,9 @@ class Query:
             return
         if 'pjialin' not in API_GET_BROWSER_DEVICE_ID:
             return self.request_device_id2()
-        response = self.session.get(API_GET_BROWSER_DEVICE_ID)
-        if response.status_code == 200:
-            try:
+        try:
+            response = self.session.get(API_GET_BROWSER_DEVICE_ID)
+            if response.status_code == 200:
                 result = json.loads(response.text)
                 response = self.session.get(b64decode(result['id']).decode())
                 if response.text.find('callbackFunction') >= 0:
@@ -147,10 +150,9 @@ class Query:
                         'RAIL_EXPIRATION': Config().RAIL_EXPIRATION,
                         'RAIL_DEVICEID': Config().RAIL_DEVICEID,
                     })
-            except Exception:
-                return self.request_device_id()
-        else:
-            return self.request_device_id()
+        except Exception:
+            if _retry < 1:
+                return self.request_device_id(force_renew, _retry + 1)
 
     def request_device_id2(self):
         headers = {

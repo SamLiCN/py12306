@@ -148,6 +148,26 @@ class Browser:
             pass
         return self.cookies, self.post_data
 
+
+def dump_response_once(name, response):
+    """诊断用：把接口原始响应 dump 到 runtime/debug/<name>_dump.txt（每个进程只 dump 一次）"""
+    if name in Order._dumped:
+        return
+    Order._dumped.add(name)
+    try:
+        dump_dir = Config().RUNTIME_DIR + 'debug/'
+        os.makedirs(dump_dir, exist_ok=True)
+        p = dump_dir + '%s_dump.txt' % name
+        with open(p, 'w', encoding='utf-8') as f:
+            f.write('status=%s\n' % getattr(response, 'status_code', '?'))
+            f.write('url=%s\n' % getattr(response, 'url', '?'))
+            f.write('\n--- BODY (前 8000 字符) ---\n')
+            f.write((response.text or '')[:8000])
+        OrderLog.add_quick_log('已 dump {} 原始响应到 {}'.format(name, p)).flush()
+    except Exception as e:
+        OrderLog.add_quick_log('dump {} 失败: {}'.format(name, e)).flush()
+
+
 class Order:
     """
     处理下单
@@ -167,6 +187,8 @@ class Order:
     wait_queue_interval = 3
 
     order_id = 0
+
+    _dumped = set()  # 诊断用：记录已 dump 过的接口名，避免刷屏
 
     notification_sustain_time = 60 * 30  # 通知持续时间 30 分钟
     notification_interval = 5 * 60  # 通知间隔
@@ -358,6 +380,19 @@ class Order:
             OrderLog.add_quick_log(OrderLog.MESSAGE_CHECK_ORDER_INFO_FAIL.format(error)).flush()
         return False
 
+    @staticmethod
+    def parse_ticket_number(value):
+        """把余票字段转成数字；空串 / '充足' / '有' / 非数字 一律返回 None（=未知或充足，不做无票判断），'无' 视为 0"""
+        value = str(value if value is not None else '').strip()
+        if value in ('', '充足', '有'):
+            return None
+        if value == '无':
+            return 0
+        try:
+            return int(value)
+        except ValueError:
+            return None
+
     def get_queue_count(self):
         """
         获取队列人数
@@ -406,13 +441,19 @@ class Order:
             """
             # if result.get('isRelogin') == 'Y': # 重新登录 TODO
 
-            ticket = result.get('data.ticket').split(',')  # 余票列表
+            dump_response_once('getQueueCount', response)
+            # data.ticket 形如 "余票,无座余票"，但实测首段可能为空串（例如 ",73"），
+            # 无条件 int() 会抛 ValueError 把整个程序带崩，所以统一走 parse_ticket_number。
+            ticket = str(result.get('data.ticket') or '').split(',')  # 余票列表
             # 这里可以判断 是真实是 硬座还是无座，避免自动分配到无座
-            ticket_number = ticket[0]  # 余票
-            if ticket_number != '充足' and int(ticket_number) <= 0:
-                if self.query_ins.current_seat == SeatType.NO_SEAT:  # 允许无座
-                    ticket_number = ticket[1]
-                if not int(ticket_number):  # 跳过无座
+            ticket_number = self.parse_ticket_number(ticket[0]) if ticket else None
+            if ticket_number is None:
+                OrderLog.add_quick_log(
+                    'getQueueCount 余票字段非数字（ticket={!r}），按“有票”继续'.format(result.get('data.ticket'))).flush()
+            elif ticket_number <= 0:
+                if self.query_ins.current_seat == SeatType.NO_SEAT and len(ticket) > 1:  # 允许无座
+                    ticket_number = self.parse_ticket_number(ticket[1])
+                if not ticket_number:  # 跳过无座
                     OrderLog.add_quick_log(OrderLog.MESSAGE_GET_QUEUE_INFO_NO_SEAT).flush()
                     return False
 
@@ -422,7 +463,8 @@ class Order:
 
             current_position = int(result.get('data.countT', 0))
             OrderLog.add_quick_log(
-                OrderLog.MESSAGE_GET_QUEUE_INFO_SUCCESS.format(current_position, ticket_number)).flush()
+                OrderLog.MESSAGE_GET_QUEUE_INFO_SUCCESS.format(
+                    current_position, '充足' if ticket_number is None else ticket_number)).flush()
             return True
         else:
             # 加入小黑屋

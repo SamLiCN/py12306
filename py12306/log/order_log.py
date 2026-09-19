@@ -12,7 +12,7 @@ class OrderLog(BaseLog):
     MESSAGE_REQUEST_INIT_DC_PAGE_FAIL = '请求初始化订单页面失败'
 
     MESSAGE_SUBMIT_ORDER_REQUEST_FAIL = '提交订单失败，错误原因 {} \n'
-    MESSAGE_SUBMIT_ORDER_REQUEST_SUCCESS = '提交订单成功'
+    MESSAGE_SUBMIT_ORDER_REQUEST_SUCCESS = '下单请求已受理（第 1/6 步，尚未生成订单）'
     MESSAGE_CHECK_ORDER_INFO_FAIL = '检查订单失败，错误原因 {} \n'
     MESSAGE_CHECK_ORDER_INFO_SUCCESS = '检查订单成功'
 

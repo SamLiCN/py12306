@@ -20,6 +20,8 @@ class Notification():
         self = cls()
         if Config().NOTIFICATION_VOICE_CODE_TYPE == 'dingxin':
             self.send_voice_code_of_dingxin(phone, name=name, info=content)
+        elif Config().NOTIFICATION_VOICE_CODE_TYPE == 'shuma':
+            self.send_voice_code_of_shuma(phone, name=name, content=content)
         else:
             self.send_voice_code_of_yiyuan(phone, name=name, content=content)
 
@@ -114,6 +116,33 @@ class Notification():
         if response.status_code in [400, 401, 403]:
             return CommonLog.add_quick_log(CommonLog.MESSAGE_VOICE_API_FORBID).flush()
         if response.status_code == 200 and result.get('return_code') == '00000':
+            CommonLog.add_quick_log(CommonLog.MESSAGE_VOICE_API_SEND_SUCCESS.format(response_message)).flush()
+            return True
+        else:
+            return CommonLog.add_quick_log(CommonLog.MESSAGE_VOICE_API_SEND_FAIL.format(response_message)).flush()
+
+    def send_voice_code_of_shuma(self, phone, name='', content=''):
+        """
+        发送语音验证码 (数脉API)
+        购买地址 https://www.shumaiapi.com/productDetail/287
+        注意：该渠道只能向指定手机播报一段 4~6 位数字（验证码），不支持播报整段文字。
+        电话响起且听到固定数字，即代表「下单成功，请及时登录 12306 付款」。
+        :return:
+        """
+        appcode = Config().NOTIFICATION_API_APP_CODE
+        if not appcode:
+            CommonLog.add_quick_log(CommonLog.MESSAGE_EMPTY_APP_CODE).flush()
+            return False
+        code = Config().NOTIFICATION_VOICE_CODE_CONTENT or '12306'
+        response = self.session.request(url=API_NOTIFICATION_BY_VOICE_CODE_SHUMEI, method='POST',
+                                        params={'mobile': phone, 'content': code},
+                                        headers={'Authorization': 'APPCODE {}'.format(appcode)})
+        result = response.json()
+        data = result.get('data') or {}
+        response_message = result.get('msg') or result.get('message') or ''
+        if response.status_code in [400, 401, 403]:
+            return CommonLog.add_quick_log(CommonLog.MESSAGE_VOICE_API_FORBID).flush()
+        if response.status_code == 200 and str(data.get('result')) == '0':
             CommonLog.add_quick_log(CommonLog.MESSAGE_VOICE_API_SEND_SUCCESS.format(response_message)).flush()
             return True
         else:

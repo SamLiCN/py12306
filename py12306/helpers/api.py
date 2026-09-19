@@ -56,5 +56,7 @@ API_FREE_CODE_QCR_API = 'https://12306-ocr.pjialin.com/check/'
 
 API_NOTIFICATION_BY_VOICE_CODE = 'http://ali-voice.showapi.com/sendVoice?'
 API_NOTIFICATION_BY_VOICE_CODE_DINGXIN = 'http://yuyin2.market.alicloudapi.com/dx/voice_notice'
+# 数脉API 语音验证码（只能向手机播报 4~6 位数字验证码，不支持整段文字）
+API_NOTIFICATION_BY_VOICE_CODE_SHUMEI = 'https://smvoice.market.alicloudapi.com/v4/voice/msg/send'
 
 API_CHECK_CDN_AVAILABLE = 'https://{}/otn/dynamicJs/omseuuq'

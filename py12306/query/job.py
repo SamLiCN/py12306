@@ -167,11 +167,17 @@ class Job:
                                                                                                               self.arrive_station))
         url = LEFT_TICKETS.get('url').format(left_date=date, left_station=self.left_station_code,
                                              arrive_station=self.arrive_station_code, type=self.query.api_type)
+        # 12306 的 leftTicket 查询接口对无 Referer 的请求会 302 到错误页，
+        # 必须带上 Referer（及显式 UA）才能拿到 200 + JSON。
+        headers = {
+            'Referer': 'https://kyfw.12306.cn/otn/leftTicket/init',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        }
         if Config.is_cdn_enabled() and Cdn().is_ready:
             self.is_cdn = True
-            return self.query.session.cdn_request(url, timeout=self.query_time_out, allow_redirects=False)
+            return self.query.session.cdn_request(url, timeout=self.query_time_out, allow_redirects=False, headers=headers)
         self.is_cdn = False
-        return self.query.session.get(url, timeout=self.query_time_out, allow_redirects=False)
+        return self.query.session.get(url, timeout=self.query_time_out, allow_redirects=False, headers=headers)
 
     def handle_response(self, response):
         """
@@ -220,6 +226,8 @@ class Job:
             QueryLog.print_ticket_available(left_date=self.get_info_of_left_date(),
                                             train_number=self.get_info_of_train_number(),
                                             rest_num=ticket_of_seat)
+            if not self.members:  # 仅查询任务（未配置乘客）：只打印余票，不下单
+                return
             if User.is_empty():
                 QueryLog.add_quick_log(QueryLog.MESSAGE_USER_IS_EMPTY_WHEN_DO_ORDER.format(self.retry_time))
                 return stay_second(self.retry_time)
@@ -252,7 +260,21 @@ class Job:
     def do_order(self, user):
         self.check_passengers()
         order = Order(user=user, query=self)
-        return order.order()
+        try:
+            return order.order()
+        except Exception as e:
+            # 下单流程里的异常只应影响本轮，不能把整个程序带崩（原来一个 int('') 就能让进程退出）
+            import traceback
+            QueryLog.add_quick_log(
+                '下单流程异常（已捕获，程序继续查询）: {}: {}'.format(type(e).__name__, e)).flush()
+            try:
+                dump_dir = Config().RUNTIME_DIR + 'debug/'
+                os.makedirs(dump_dir, exist_ok=True)
+                with open(dump_dir + 'order_error.log', 'a', encoding='utf-8') as f:
+                    f.write(traceback.format_exc() + '\n')
+            except Exception:
+                pass
+            return False
 
     def get_results(self, response):
         """
@@ -329,12 +351,17 @@ class Job:
         return user
 
     def check_passengers(self):
+        if not self.members:  # 未配置乘客：视为仅查询任务，不校验、不移除任务
+            return True
         if not self.passengers:
             QueryLog.add_quick_log(QueryLog.MESSAGE_CHECK_PASSENGERS.format(self.job_name)).flush()
             passengers = User.get_passenger_for_members(self.members, self.account_key)
             if passengers:
                 self.set_passengers(passengers)
-            else:  # 退出当前查询任务
+            elif passengers is None:  # 乘客信息获取失败（网络/未登录态）：本轮跳过，保留任务，避免刷爆接口
+                QueryLog.add_quick_log('获取乘客信息失败，本轮跳过下单，{} 秒后重试'.format(self.retry_time)).flush()
+                stay_second(self.retry_time)
+            else:  # 确定性失败（如乘客不存在），退出当前查询任务
                 self.destroy()
         return True
 
