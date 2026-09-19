@@ -16,6 +16,8 @@ class Config:
     QUERY_JOBS = []
     # 查询间隔
     QUERY_INTERVAL = 1
+    # 12306 预售期：含乘车日当天在内共可售多少天（15 = 今天最远能买到 今天+14）
+    PRESALE_DAYS = 15
     # 查询重试次数
     REQUEST_MAX_RETRY = 5
     # 用户心跳检测间隔

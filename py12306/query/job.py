@@ -66,7 +66,10 @@ class Job:
     INDEX_LEFT_TIME = 8
     INDEX_ARRIVE_TIME = 9
 
-    max_buy_time = 32
+    # 本轮所有日期都不在可售范围时的额外等待（秒），避免空转刷日志
+    idle_stay_second = 60
+    # 已经详细提示过「日期不可查」的日期（每进程每日期只打一次，避免每轮刷屏）
+    _unqueryable_date_logged = set()
 
     def __init__(self, info, query):
         self.cluster = Cluster()
@@ -125,12 +128,20 @@ class Job:
                 for date in self.left_dates:
                     self.left_date = date
                     response = self.query_by_date(date)
+                    if response is None:  # 日期不在可售范围：没发请求，不需要停留
+                        if not self.is_alive: return
+                        if is_main_thread():
+                            QueryLog.flush(sep='\t\t', publish=False)
+                        continue
                     self.handle_response(response)
                     QueryLog.add_query_time_log(time=response.elapsed.total_seconds(), is_cdn=self.is_cdn)
                     if not self.is_alive: return
                     self.safe_stay()
                     if is_main_thread():
                         QueryLog.flush(sep='\t\t', publish=False)
+            if all(not self.is_date_queryable(date) for date in self.left_dates):
+                # 所有日期都还没到可售期（比如想抢 15 天后的票）：不必按查询间隔空转
+                stay_second(self.idle_stay_second)
             if not Config().QUERY_JOB_THREAD_ENABLED:
                 QueryLog.add_quick_log('').flush(publish=False)
                 break
@@ -138,33 +149,79 @@ class Job:
                 QueryLog.add_log('\n').flush(sep='\t\t', publish=False)
             if Const.IS_TEST: return
 
-    def judge_date_legal(self, date):
+    def get_presale_days(self):
+        """
+        12306 当前预售期：含乘车日当天在内共可售多少天。
+        2026-09-20 实测为 15 天，即当天最远只能买到「当天 + 14」的票。
+        """
+        try:
+            days = int(Config().PRESALE_DAYS)
+        except (AttributeError, TypeError, ValueError):
+            days = 15
+        return days if days > 0 else 15
+
+    def check_date_queryable(self, date):
+        """
+        判断乘车日期是否在 12306 可售范围内：返回 (是否可查, 不可查的原因)
+
+        ⚠️ 为什么必须在发请求前拦：超出预售期的日期去查，12306 不会返回空列表，
+        而是 302 跳转到 https://www.12306.cn/mormhweb/logFiles/error.html，
+        这个响应和「被限流 / 会话失效」完全一样，很容易被误读成「需要重新登录」，
+        还会把 interval_additional 越堆越大、白刷请求。不查才是对的。
+        """
         date_now = datetime.datetime.now()
-        date_query = datetime.datetime.strptime(str(date), "%Y-%m-%d")
-        diff = (date_query - date_now).days
-        if date_now.day == date_query.day:
-            diff = 0
+        # 只比日期，不比时刻：否则早上 07:00 查「今天」会因为 (今天00:00 - 现在) < 1 天而被算成昨天。
+        # （上游原来用「同一天号就当作 diff=0」来兜底，那会让下个月同一天号的日期被误判成今天。）
+        diff = (datetime.datetime.strptime(str(date), "%Y-%m-%d").date() - date_now.date()).days
         if diff < 0:
-            msg = '乘车日期错误，比当前时间还早！！'
-            QueryLog.add_quick_log(msg).flush(publish=False)
-            raise RuntimeError(msg)
-        elif diff > self.max_buy_time:
-            msg = '乘车日期错误，超出一个月预售期！！'
-            QueryLog.add_quick_log(msg).flush(publish=False)
-            raise RuntimeError(msg)
-        else:
-            return date_query.strftime("%Y-%m-%d")
+            return False, '乘车日期已过（当前 {}）'.format(date_now.strftime('%Y-%m-%d'))
+        presale_days = self.get_presale_days()
+        if diff > presale_days - 1:
+            return False, '日期超出 12306 预售期（当前预售期 {} 天，{} 最远只能买到 {}）；' \
+                          '该日期等到可售当天会自动开始查询'.format(
+                presale_days, date_now.strftime('%Y-%m-%d'),
+                (date_now + timedelta(days=presale_days - 1)).strftime('%Y-%m-%d'))
+        return True, ''
+
+    def is_date_queryable(self, date):
+        return self.check_date_queryable(date)[0]
+
+    def judge_date_legal(self, date):
+        """
+        合法的日期返回规范化后的字符串；不可查返回 None（调用方跳过该日期）
+        """
+        queryable, reason = self.check_date_queryable(date)
+        if not queryable:
+            self.log_date_unqueryable(date, reason)
+            return None
+        return datetime.datetime.strptime(str(date), "%Y-%m-%d").strftime("%Y-%m-%d")
+
+    def log_date_unqueryable(self, date, reason):
+        """
+        提示不可查的日期：详细原因每进程每日期只打一次，避免每轮刷屏。
+        每轮跳过的简要说明由查询行里的 MESSAGE_QUERY_DATE_SKIPPED 体现。
+        """
+        key = '{}|{}'.format(self.job_name, date)
+        if key in Job._unqueryable_date_logged:
+            return
+        Job._unqueryable_date_logged.add(key)
+        QueryLog.add_quick_log(
+            QueryLog.MESSAGE_QUERY_DATE_UNAVAILABLE.format(job_name=self.job_name, date=date, reason=reason)).flush(
+            publish=False)
 
     def query_by_date(self, date):
         """
         通过日期进行查询
-        :return:
+        :return: 请求响应；日期不在可售范围时返回 None（不发送请求）
         """
-        date = self.judge_date_legal(date)
         from py12306.helpers.cdn import Cdn
         QueryLog.add_log(('\n' if not is_main_thread() else '') + QueryLog.MESSAGE_QUERY_START_BY_DATE.format(date,
                                                                                                               self.left_station,
                                                                                                               self.arrive_station))
+        date = self.judge_date_legal(date)
+        if not date:
+            QueryLog.add_log(QueryLog.MESSAGE_QUERY_DATE_SKIPPED)
+            return None
         url = LEFT_TICKETS.get('url').format(left_date=date, left_station=self.left_station_code,
                                              arrive_station=self.arrive_station_code, type=self.query.api_type)
         # 12306 的 leftTicket 查询接口对无 Referer 的请求会 302 到错误页，

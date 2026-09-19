@@ -29,6 +29,14 @@ class QueryLog(BaseLog):
     MESSAGE_QUERY_LOG_OF_EVERY_TRAIN = '{}'
     MESSAGE_QUERY_LOG_OF_TRAIN_INFO = '{} {}'
     MESSAGE_QUERY_START_BY_DATE = '出发日期 {}: {} - {}'
+    # 日期不在 12306 可售范围（超出预售期 / 已过期）时的提示：不发请求，直接跳过
+    MESSAGE_QUERY_DATE_SKIPPED = '（已跳过：日期不在可售范围，未发送请求）'
+    MESSAGE_QUERY_DATE_UNAVAILABLE = '查询任务 {job_name} 的乘车日期 {date} 暂不查询：{reason}'
+    # 302 是 12306 的错误页跳转，容易被误读成「登录失效」，解释一次
+    MESSAGE_QUERY_ERROR_HINT_OF_302 = '提示：302 会跳转到 12306 错误页 error.html，通常是「被限流 / 会话失效」，' \
+                                      '不是接口坏了；若只对个别日期报 302，先确认这些日期是否超出预售期' \
+                                      '（见 env.py 的 PRESALE_DAYS）'
+    _hint_of_302_logged = False
 
     MESSAGE_JOBS_DID_CHANGED = '任务已更新，正在重新加载...\n'
 
@@ -155,6 +163,9 @@ class QueryLog(BaseLog):
         if reason:
             self.add_quick_log('错误原因 {}   '.format(reason))
         self.flush(sep='\t')
+        if code == 302 and not QueryLog._hint_of_302_logged:
+            QueryLog._hint_of_302_logged = True
+            self.add_quick_log(cls.MESSAGE_QUERY_ERROR_HINT_OF_302).flush(publish=False)
         return self
 
     @classmethod
