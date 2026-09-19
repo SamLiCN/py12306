@@ -278,6 +278,9 @@ class Order:
                                    normal_message + info_message)
         if Config().BARK_ENABLED:
             Notification.push_bark(normal_message + info_message)
+        if Config().FEISHU_ENABLED:  # 飞书通知
+            Notification.feishu_webhook(
+                normal_message + info_message + OrderLog.MESSAGE_ORDER_SUCCESS_NOTIFICATION_OF_FEISHU_CONTENT)
 
         if Config().NOTIFICATION_BY_VOICE_CODE:  # 语音通知
             if Config().NOTIFICATION_VOICE_CODE_TYPE == 'dingxin':

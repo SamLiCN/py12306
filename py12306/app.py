@@ -120,6 +120,10 @@ class App:
             CommonLog.add_quick_log(CommonLog.MESSAGE_TEST_SEND_DINGTALK).flush()
             Notification.dingtalk_webhook('测试发送信息')
 
+        if Config().FEISHU_ENABLED:  # 飞书通知
+            CommonLog.add_quick_log(CommonLog.MESSAGE_TEST_SEND_FEISHU).flush()
+            Notification.feishu_webhook('测试发送信息（py12306 飞书渠道测试，收到即说明已打通）')
+
         if Config().TELEGRAM_ENABLED:  # Telegram通知
             CommonLog.add_quick_log(CommonLog.MESSAGE_TEST_SEND_TELEGRAM).flush()
             Notification.send_to_telegram('测试发送信息')

@@ -31,6 +31,11 @@ class Notification():
         self.send_dingtalk_by_webbook(content=content)
 
     @classmethod
+    def feishu_webhook(cls, content=''):
+        self = cls()
+        return self.send_feishu_by_webhook(content=content)
+
+    @classmethod
     def send_email(cls, to, title='', content=''):
         self = cls()
         self.send_email_by_smtp(to, title, content)
@@ -214,6 +219,14 @@ class Notification():
         dingtalk = DingtalkChatbot(webhook)
         dingtalk.send_text(msg=content, is_at_all=True)
         pass
+
+    def send_feishu_by_webhook(self, content, sign=True):
+        """
+        飞书群自定义机器人（签名 + 发送的实现在 py12306/feishu/bot.py）
+        :return: 是否发送成功（飞书业务错误也返回 HTTP 200，成功判据是响应体的 code == 0）
+        """
+        from py12306.feishu.bot import FeishuBot
+        return FeishuBot().send(content, sign=sign)
 
     def send_to_telegram_bot(self, content):
         bot_api_url = Config().TELEGRAM_BOT_API_URL

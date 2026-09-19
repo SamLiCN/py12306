@@ -66,6 +66,13 @@ class Config:
     DINGTALK_ENABLED = 0
     DINGTALK_WEBHOOK = ''
 
+    # 飞书（群自定义机器人）配置
+    FEISHU_ENABLED = 0
+    FEISHU_WEBHOOK = ''
+    FEISHU_SECRET = ''  # 机器人安全设置里的「签名校验」密钥；留空则不签名
+    FEISHU_AT_ALL = 1  # 是否 @所有人（手机端能否弹通知主要看客户端设置，@ 只是辅助手段）
+    FEISHU_AT_USER_IDS = ''  # @指定人，逗号分隔；只支持 open_id（不支持 user_id / email）
+
     # Telegram推送配置
     TELEGRAM_ENABLED = 0
     TELEGRAM_BOT_API_URL = ''

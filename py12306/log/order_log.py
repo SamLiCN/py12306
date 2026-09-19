@@ -39,6 +39,14 @@ class OrderLog(BaseLog):
 
     MESSAGE_ORDER_SUCCESS_NOTIFICATION_OF_EMAIL_CONTENT = '订单号 {}，请及时登录12306账号[{}]，打开 \'未完成订单\'，在30分钟内完成支付!'
 
+    # 飞书专用：旧地址 /otn/view/ticketOrder/ticketOrder.html 已 404 下线，
+    # 现行未完成订单页是 /otn/view/train_order.html（该页默认 tab 即「未完成订单」）。
+    # ⚠️ 2026-09-19 实测 200（手机 UA 不会被强跳 App）；12306 有改版前科，
+    # 若将来这个地址 404 了，去 /otn/view/index.html 的「订单中心」里找当前地址。
+    MESSAGE_ORDER_SUCCESS_NOTIFICATION_OF_FEISHU_CONTENT = '\n未完成订单页：https://kyfw.12306.cn/otn/view/train_order.html' \
+                                                          '\n（手机端打开会自动跳登录；网页版是桌面布局，手机上需手动缩放，' \
+                                                          '最省事的还是直接打开 12306 App → 订单 → 未支付）'
+
     MESSAGE_JOB_CLOSED = '当前任务已结束'
 
     @classmethod

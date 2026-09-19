@@ -24,6 +24,7 @@ class CommonLog(BaseLog):
     MESSAGE_TEST_SEND_VOICE_CODE = '正在测试发送语音验证码...'
     MESSAGE_TEST_SEND_EMAIL = '正在测试发送邮件...'
     MESSAGE_TEST_SEND_DINGTALK = '正在测试发送钉钉消息...'
+    MESSAGE_TEST_SEND_FEISHU = '正在测试发送飞书消息...'
     MESSAGE_TEST_SEND_TELEGRAM = '正在测试推送到Telegram...'
     MESSAGE_TEST_SEND_SERVER_CHAN = '正在测试发送ServerChan消息...'
     MESSAGE_TEST_SEND_PUSH_BEAR = '正在测试发送PushBear消息...'
@@ -39,6 +40,9 @@ class CommonLog(BaseLog):
 
     MESSAGE_SEND_TELEGRAM_SUCCESS = 'Telegram推送成功'
     MESSAGE_SEND_TELEGRAM_FAIL = 'Telegram推送失败，错误原因 {}'
+
+    MESSAGE_SEND_FEISHU_SUCCESS = '飞书推送成功'
+    MESSAGE_SEND_FEISHU_FAIL = '飞书推送失败，错误原因 {}'
 
     MESSAGE_SEND_SERVER_CHAN_SUCCESS = '发送成功，请检查微信'
     MESSAGE_SEND_SERVER_CHAN_FAIL = 'ServerChan发送失败，请检查KEY'
@@ -103,6 +107,8 @@ class CommonLog(BaseLog):
             self.add_quick_log('邮件通知: {}'.format(get_true_false_text(Config().EMAIL_ENABLED, enable, disable)))
         if Config().DINGTALK_ENABLED:
             self.add_quick_log('钉钉通知: {}'.format(get_true_false_text(Config().DINGTALK_ENABLED, enable, disable)))
+        if Config().FEISHU_ENABLED:
+            self.add_quick_log('飞书通知: {}'.format(get_true_false_text(Config().FEISHU_ENABLED, enable, disable)))
         if Config().TELEGRAM_ENABLED:
             self.add_quick_log('Telegram通知: {}'.format(get_true_false_text(Config().TELEGRAM_ENABLED, enable, disable)))
         if Config().SERVERCHAN_ENABLED:
