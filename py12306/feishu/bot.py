@@ -18,6 +18,12 @@
 5. text 消息不渲染 Markdown（post 富文本也没有 Markdown，只有 interactive 卡片有）。
 6. 手机端能否弹通知主要取决于客户端设置（新群默认开启提醒），@ 只是辅助手段；
    官方只在「折叠的会话」场景承诺「@ 你仍会通知」，并未承诺穿透「消息免打扰」。
+7. 本模块【故意不 import py12306.helpers.request】——那个模块顶层 `from requests_html import ...`，
+   会把 HTML 解析 + pyppeteer 整套栈拖进 import 链，导致 `check_feishu.py` 这种只要发一个
+   JSON POST 的自检脚本，在没有 requests_html 的环境里（例如 Mac 上的系统 python3，
+   见 AGENTS.md「部署环境」）直接 `ModuleNotFoundError: No module named 'requests_html'`，
+   飞书代码一行都跑不到。飞书 webhook 不需要任何 HTML 能力，用 requests 就够，
+   改动前想清楚：这里加回 Request() 会把自检脚本重新绑死在 NAS 上。
 """
 import base64
 import hashlib
@@ -25,8 +31,9 @@ import hmac
 import json
 import time
 
+import requests
+
 from py12306.config import Config
-from py12306.helpers.request import Request
 from py12306.log.common_log import CommonLog
 
 
@@ -54,7 +61,8 @@ class FeishuBot:
     }
 
     def __init__(self):
-        self.session = Request()
+        # 用 requests.Session 而不是项目的 Request()，原因见文件头第 7 条
+        self.session = requests.Session()
 
     @classmethod
     def send_text(cls, content):
@@ -141,9 +149,17 @@ class FeishuBot:
         try:
             response = self.session.request(url=webhook, method='POST',
                                             headers={'Content-Type': 'application/json'},
-                                            data=json.dumps(payload, ensure_ascii=False).encode('utf-8'))
-            status_code = getattr(response, 'status_code', None)
-            result = response.json(default={}) if status_code else {}
+                                            data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                                            timeout=Config().TIME_OUT_OF_REQUEST)
+            status_code = response.status_code
+            try:
+                # 注意：项目的 Request() 给 response.json() 加过 default= 参数，
+                # 裸 requests 没有这个参数，这里必须自己兜住非 JSON 响应（例如网关 HTML 错误页）
+                result = response.json()
+            except ValueError:
+                result = {}
+            if not isinstance(result, dict):
+                result = {}
         except Exception as e:  # 通知失败绝不允许影响下单主流程
             CommonLog.add_quick_log(CommonLog.MESSAGE_SEND_FEISHU_FAIL.format(
                 '请求异常 {}（本地时间 {}）'.format(e, time.strftime('%Y-%m-%d %H:%M:%S')))).flush()

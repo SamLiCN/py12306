@@ -2,12 +2,19 @@
 """
 飞书通知自检脚本
 
-用法（在 NAS 上，先 source .venv/bin/activate）：
+用法（NAS 上 `source .venv/bin/activate` 后，或在 Mac 上直接用系统 python3）：
     python check_feishu.py                      # 用 env.py 里的配置发一条测试消息
     python check_feishu.py --no-sign            # 不加签名发送（用来区分「签名错」和别的问题）
     python check_feishu.py --dry-run            # 只打印将要发送的请求体，不真的发
     python check_feishu.py --webhook 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx' --secret 'xxx'
     python check_feishu.py --text '自定义测试内容' --no-at
+
+环境要求：本脚本只需要 `py12306` 代码 + `requests`（系统 python3 自带即可），
+【不需要】requests_html / pyppeteer / redis —— 因为 py12306/feishu/bot.py 故意不 import
+项目自带的 Request()（它顶层依赖 requests_html），py12306/log/base.py 也把 Cluster(redis)
+的 import 延迟到了「真的开集群」时。所以本脚本在 Mac 上也能直接跑：
+    /usr/local/bin/python3 check_feishu.py
+（`python main.py` 那种跑整个程序的活仍然只能在 NAS 的 .venv 里干，见 AGENTS.md「二」。）
 
 这个脚本走的是正式代码路径（py12306/feishu/bot.py 的签名与发送），
 所以它通了就代表下单成功时的飞书通知也通了。

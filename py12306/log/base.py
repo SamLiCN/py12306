@@ -26,7 +26,6 @@ class BaseLog:
 
     @classmethod
     def flush(cls, sep='\n', end='\n', file=None, exit=False, publish=True):
-        from py12306.cluster.cluster import Cluster
         self = cls()
         logs = self.get_logs()
         # 输出到文件
@@ -34,12 +33,20 @@ class BaseLog:
             file = open(Config().OUT_PUT_LOG_TO_FILE_PATH, 'a', encoding='utf-8')
         if not file: file = None
         # 输出日志到各个节点
-        if publish and self.quick_log and Config().is_cluster_enabled() and Cluster().is_ready:  #
-            f = io.StringIO()
-            with redirect_stdout(f):
-                print(*logs, sep=sep, end='' if end == '\n' else end)
-            out = f.getvalue()
-            Cluster().publish_log_message(out)
+        # 注意：Cluster 必须【延迟到真正开集群时】才 import —— py12306.cluster.cluster 顶层是
+        # `import redis`，而 redis 只有开集群才用得上。原来无条件 import，会让任何「只想打日志」
+        # 的环境（例如 Mac 上用系统 python3 跑 check_feishu.py，没装 redis）在日志环节直接
+        # ModuleNotFoundError: No module named 'redis' —— 消息其实已经发出去了，却报错退出。
+        if publish and self.quick_log and Config().is_cluster_enabled():
+            from py12306.cluster.cluster import Cluster
+            if Cluster().is_ready:
+                f = io.StringIO()
+                with redirect_stdout(f):
+                    print(*logs, sep=sep, end='' if end == '\n' else end)
+                out = f.getvalue()
+                Cluster().publish_log_message(out)
+            else:
+                print(*logs, sep=sep, end=end, file=file)
         else:
             print(*logs, sep=sep, end=end, file=file)
         self.empty_logs(logs)
