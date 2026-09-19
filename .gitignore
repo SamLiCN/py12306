@@ -10,3 +10,8 @@ env.py
 env.slave.py
 env.docker.py
 docker-compose.yml
+
+# 本地运行日志（含会话/请求痕迹，不进公开仓库）
+run.log
+# 项目长期记忆笔记（含乘车人姓名、订单号、内网地址等个人信息，仅保留在本地）
+AGENTS.md
